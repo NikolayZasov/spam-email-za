@@ -41,6 +41,10 @@ foreach (['', 'Ищу Тигуан, объявление https://auto.example.te
 check(SpamEmailZA\Rules::match('ПРЕДЛАГАЕМ — партнёрство и экспресс-опрос', 'Свой шаблон | предлагаем партнерство | экспресс опрос / экспресс тест') === ['Свой шаблон'], 'Пользовательское правило поддерживает варианты, Ё и пунктуацию');
 check(SpamEmailZA\Rules::match('предлагаем', 'Неполное | предлагаем') === [], 'Одно условие не должно становиться правилом');
 check(SpamEmailZA\Rules::invalidLine('Повтор | реклама | РЕКЛАМА') === 1, 'Повтор условия не образует два признака');
+check(SpamEmailZA\Rules::invalidLine($defaults) === null, 'Стартовый набор целиком валиден');
+$imported = 'Предлагаем услуги. Таргетированная реклама для вашего бизнеса.';
+check(SpamEmailZA\Rules::match($imported, $defaults) === ['Рассылка рекламных услуг'], 'Русскоязычное правило ловит предложение рекламы');
+check(SpamEmailZA\Rules::match('Нужна контекстная реклама для нового сайта, сколько стоит?', $defaults) === [], 'Запрос цены на рекламу остаётся заявкой');
 
 $owner='owner@example.test'; $copy='review@example.test'; $to=[$owner, $copy];
 $GLOBALS['options']['seza_settings'] = ['review_email'=>$copy,'rules'=>$defaults];
@@ -55,6 +59,14 @@ $GLOBALS['mail']=[]; $GLOBALS['mail_results']=[true,false];
 check(SpamEmailZA\Plugin::deliver(null,$to,'Запрос','Текст',[],$advertisement)===true && count($GLOBALS['mail'])===2, 'Сбой копии не должен вызывать повторную отправку владельцу');
 $GLOBALS['mail']=[]; $GLOBALS['mail_results']=[false,true];
 check(SpamEmailZA\Plugin::deliver(null,$to,'Запрос','Текст',[],$advertisement)===false && count($GLOBALS['mail'])===1, 'При ошибке основной доставки копия ждёт повтора');
+
+$GLOBALS['options']['seza_settings'] = ['review_email'=>'','block_spam'=>true,'rules'=>$defaults];
+$GLOBALS['mail']=[];
+check(SpamEmailZA\Plugin::deliver(null,$to,'Запрос','Текст',[],$advertisement)===true && $GLOBALS['mail']===[], 'Блокировка останавливает письма всем получателям');
+check(SpamEmailZA\Plugin::deliver(null,[$owner],'Запрос','Текст',[],$imported)===true && $GLOBALS['mail']===[], 'Блокировка работает без адреса копии');
+check(SpamEmailZA\Plugin::deliver(null,[$owner],'Запрос','Текст',[],'Рассчитайте доставку до Ухты')===null, 'Обычная заявка проходит в режиме блокировки');
+check(SpamEmailZA\Plugin::sanitize(['review_email'=>'','block_spam'=>'1','rules'=>$defaults])['block_spam']===true, 'Флажок блокировки сохраняется');
+check(SpamEmailZA\Plugin::sanitize(['review_email'=>'','rules'=>$defaults])['block_spam']===false, 'Снятый флажок выключает блокировку');
 
 $GLOBALS['network']['auto_update_plugins']=['other/plugin.php'];
 SpamEmailZA\Plugin::activate();

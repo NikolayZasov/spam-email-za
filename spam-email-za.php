@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Спам Email ZA
- * Description: Проверяет текст заявок по редактируемым правилам и помечает подозрительные копии писем.
- * Version: 1.0.0
+ * Description: Проверяет текст заявок по редактируемым правилам и блокирует рассылку спама или помечает копию.
+ * Version: 1.1.0
  * Update URI: https://github.com/NikolayZasov/spam-email-za
  * Author: Агентство Засовского
  * Author URI: https://zasovskiy.ru/
@@ -46,14 +46,16 @@ final class Plugin {
         $saved = (array)get_option(self::OPTION, []);
         return [
             'review_email' => is_string($saved['review_email'] ?? null) ? $saved['review_email'] : '',
+            'block_spam' => !empty($saved['block_spam']),
             'rules' => is_string($saved['rules'] ?? null) ? $saved['rules'] : Rules::defaults(),
         ];
     }
 
-    /** Применяется только для отметки уже настроенной копии письма. */
+    /** Обрабатывает совпадение до отправки писем. */
     public static function deliver(?bool $result, array $to, string $subject, string $body, array $headers, string $text): ?bool {
         if ($result !== null) return $result;
         $config = self::settings();
+        if ($config['block_spam']) return Rules::match($text, $config['rules']) ? true : null;
         if ($config['review_email'] === '') return null;
         $copy = array_values(array_filter($to, static fn (string $email): bool => strcasecmp($email, $config['review_email']) === 0));
         if (!$copy || !($matches = Rules::match($text, $config['rules']))) return null;
@@ -97,7 +99,7 @@ final class Plugin {
             add_settings_error(self::OPTION, 'invalid_rule', sprintf('Проверьте правило в строке %d. Сохранены прежние настройки.', $bad));
             return self::settings();
         }
-        return ['review_email'=>$email, 'rules'=>$rules];
+        return ['review_email'=>$email, 'block_spam'=>in_array($input['block_spam'] ?? null, ['1', true], true), 'rules'=>$rules];
     }
 
     public static function render(): void {
@@ -110,9 +112,11 @@ final class Plugin {
             <form method="post" action="options.php">
                 <?php settings_fields(self::OPTION); ?>
                 <table class="form-table" role="presentation"><tbody>
+                    <tr><th scope="row">Блокировка</th>
+                        <td><label><input type="checkbox" name="seza_settings[block_spam]" value="1" <?php checked($settings['block_spam']); ?>> Блокировать отправку писем при совпадении правила</label></td></tr>
                     <tr><th scope="row"><label for="seza-review-email">Почта для пометок</label></th>
                         <td><input type="email" class="regular-text" id="seza-review-email" name="seza_settings[review_email]" value="<?php echo esc_attr($settings['review_email']); ?>" aria-describedby="seza-review-help">
-                            <p class="description" id="seza-review-help">Этот адрес должен получать копию заявок. При совпадении правило добавляет пометку только в его письмо. Пустое поле отключает пометки.</p></td></tr>
+                            <p class="description" id="seza-review-help">При выключенной блокировке пометка добавляется в письмо на этот адрес, если он получает копию заявки. Пустое поле отключает пометки.</p></td></tr>
                     <tr><th scope="row"><label for="seza-rules">Правила</label></th>
                         <td><textarea id="seza-rules" name="seza_settings[rules]" class="large-text" rows="13" spellcheck="false" maxlength="24000" aria-describedby="seza-rules-help"><?php echo esc_textarea($settings['rules']); ?></textarea>
                             <p class="description" id="seza-rules-help">Одно правило на строку. После названия укажите от двух до пяти признаков через <code>|</code>. Варианты одного признака разделяйте <code> / </code>. Строки с <code>#</code> — комментарии.</p>

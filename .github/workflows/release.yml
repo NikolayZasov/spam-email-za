@@ -33,7 +33,7 @@ jobs:
           php -l includes/Rules.php
           php tests/smoke.php
           mkdir -p package/spam-email-za/includes
-          cp spam-email-za.php readme.txt LICENSE.txt package/spam-email-za/
+          cp spam-email-za.php readme.txt LICENSE.txt LICENSE-tgtrigger.txt package/spam-email-za/
           cp includes/Rules.php package/spam-email-za/includes/
           (cd package && zip -qr "../spam-email-za-$version.zip" spam-email-za)
       - name: Publish GitHub release
